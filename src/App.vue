@@ -1,125 +1,119 @@
 <template>
   <div class="container" :class="{ 'dark-mode': isDarkMode }">
-    <header class="top-nav-container">
+    <header class="top-nav-wrapper">
       <div class="top-nav">
-        <div class="nav-left">
-          <h1 class="logo">云剪贴板</h1>
-          <div class="room-tag" @click="copyLink">
+        <div class="nav-section left">
+          <span class="logo">云剪贴板</span>
+          <div class="room-pill" @click="copyLink">
             <span class="room-name">{{ roomId }}</span>
-            <span class="status-dot" :class="{ 'online': !isInitialLoading }"></span>
+            <span class="dot" :class="{ 'online': isReady }"></span>
           </div>
         </div>
 
-        <div class="nav-center">
+        <div class="nav-section center">
           <transition name="fade">
-            <span v-if="expireTime !== 'never'" class="expire-badge">
+            <div v-if="expireTime !== 'never'" class="expire-tag">
               ⏱️ {{ getExpireLabel(expireTime) }}后销毁
-            </span>
+            </div>
           </transition>
         </div>
 
-        <div class="nav-right">
-          <button @click="openHistory" class="icon-btn" title="最近访问">📜</button>
-          <button @click="isDarkMode = !isDarkMode" class="icon-btn">{{ isDarkMode ? '☀️' : '🌙' }}</button>
-          <button @click="openSettings" class="icon-btn" title="房间设置">⚙️</button>
+        <div class="nav-section right">
+          <button @click="openHistory" class="btn-icon">📜</button>
+          <button @click="isDarkMode = !isDarkMode" class="btn-icon">{{ isDarkMode ? '☀️' : '🌙' }}</button>
+          <button @click="openSettings" class="btn-icon">⚙️</button>
         </div>
       </div>
     </header>
 
-    <main class="main-content">
-      <div class="info-bar">
-        <div class="status-group">
-          <span :class="['status-text', { 'success': statusText === '已同步' }]">{{ statusText }}</span>
-          <span class="room-tip">（URL后加 ?room=xxx 可跳转房间）</span>
+    <main class="content-area">
+      <div class="status-bar">
+        <div class="status-left">
+          <span :class="['status-msg', syncStatusClass]">{{ currentStatus }}</span>
+          <span class="hint">URL后加 ?room=xxx 可跳转</span>
         </div>
-        <span class="stats">{{ textStats.chars }} 字 | {{ textStats.lines }} 行</span>
+        <div class="status-right">{{ textStats.chars }} 字 | {{ textStats.lines }} 行</div>
       </div>
-      <div class="editor-wrapper">
+
+      <div class="editor-box">
         <textarea 
           v-model="textContent" 
           @input="handleInput" 
-          :placeholder="isInitialLoading ? '正在加载云端内容...' : '在此输入内容，停顿后自动同步...'" 
-          :disabled="isInitialLoading"
-          class="main-textarea"
+          placeholder="在此输入内容，停顿后自动同步到云端..." 
           spellcheck="false"
         ></textarea>
       </div>
     </main>
 
-    <div v-if="showSettings || showHistory" class="drawer-overlay" @click="closeAllDrawers"></div>
-
-    <aside :class="['drawer', { 'active': showSettings }]">
-      <div class="drawer-header">
+    <div v-if="showSettings || showHistory" class="mask" @click="closeAll"></div>
+    <aside :class="['side-drawer', { 'show': showSettings }]">
+      <div class="drawer-head">
         <h3>房间设置</h3>
-        <button @click="showSettings = false" class="drawer-close-btn">✕</button>
+        <button @click="showSettings = false">✕</button>
       </div>
-      <div class="drawer-body">
-        <section class="opt-group">
+      <div class="drawer-content">
+        <div class="field">
           <label>🔒 访问密码</label>
-          <div class="input-group">
-            <input v-model="roomPassword" type="password" placeholder="留空则不设密码" />
-            <button @click="saveFullSettings" class="inner-save-btn">保存</button>
+          <div class="input-btn-group">
+            <input v-model="roomPassword" type="password" placeholder="留空不设密码" />
+            <button @click="saveSettings">保存</button>
           </div>
-        </section>
-        <section class="opt-group">
-          <label>⏰ 自动销毁 (有效期)</label>
-          <div class="grid-options">
+        </div>
+        <div class="field">
+          <label>⏰ 自动销毁</label>
+          <div class="opt-grid">
             <button v-for="opt in expireOptions" :key="opt.val" 
               :class="{ active: expireTime === opt.val }"
               @click="expireTime = opt.val">{{ opt.label }}</button>
           </div>
-        </section>
-        <section class="opt-group">
-          <label>🔗 房间链接</label>
-          <button @click="showQR = true" class="btn-full-primary">生成分享二维码</button>
-        </section>
+        </div>
+        <div class="field">
+          <label>🔗 分享链接</label>
+          <button @click="showQR = true" class="primary-btn">生成分享二维码</button>
+        </div>
       </div>
     </aside>
 
-    <aside :class="['drawer', { 'active': showHistory }]">
-      <div class="drawer-header">
+    <aside :class="['side-drawer', { 'show': showHistory }]">
+      <div class="drawer-head">
         <h3>最近访问</h3>
-        <button @click="showHistory = false" class="drawer-close-btn">✕</button>
+        <button @click="showHistory = false">✕</button>
       </div>
-      <div class="drawer-body">
-        <div v-if="roomHistory.length === 0" class="empty-tip">暂无访问记录</div>
-        <div v-for="(room, idx) in roomHistory" :key="idx" class="history-card" @click="jumpToRoom(room)">
-          <span>🏠 {{ room }}</span>
+      <div class="drawer-content">
+        <div v-if="!roomHistory.length" class="empty">暂无记录</div>
+        <div v-for="r in roomHistory" :key="r" class="history-item" @click="jumpRoom(r)">
+          🏠 {{ r }}
         </div>
       </div>
     </aside>
 
     <teleport to="body">
-      <transition name="fade">
-        <div v-if="showQR" class="modal-overlay" @click="showQR = false">
-          <div class="modal-card" @click.stop>
-            <div class="qr-container">
-              <qrcode-vue :value="currentUrl" :size="200" level="H" />
-            </div>
-            <p class="qr-tip">扫码分享房间：<b>{{ roomId }}</b></p>
-            <button @click="showQR = false" class="btn-full-primary" style="margin-top:15px; background:#007bff; color:#fff">关闭</button>
-          </div>
+      <div v-if="showQR" class="modal" @click="showQR = false">
+        <div class="modal-body" @click.stop>
+          <div class="qr-wrap"><qrcode-vue :value="currentUrl" :size="180" level="H" /></div>
+          <p>扫码进入房间: {{ roomId }}</p>
+          <button @click="showQR = false">关闭</button>
         </div>
-      </transition>
+      </div>
     </teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import QrcodeVue from 'qrcode.vue'
 
-const textContent = ref('')
 const roomId = new URLSearchParams(window.location.search).get('room') || '公共频道'
-const isInitialLoading = ref(true) // 核心防丢数据锁
-const statusText = ref('连接中...')
+const textContent = ref('')
+const isReady = ref(false)
+const currentStatus = ref('正在连接...')
 const isDarkMode = ref(false)
 const showSettings = ref(false)
 const showHistory = ref(false)
 const showQR = ref(false)
 const roomPassword = ref('')
 const expireTime = ref('never')
-const roomHistory = ref(JSON.parse(localStorage.getItem('room_history') || '[]'))
+const roomHistory = ref(JSON.parse(localStorage.getItem('jjb_history') || '[]'))
 
 const expireOptions = [
   { label: '永不', val: 'never' }, { label: '1h', val: '1h' },
@@ -133,151 +127,158 @@ const textStats = computed(() => ({
   lines: textContent.value ? textContent.value.split('\n').length : 0
 }))
 
+const syncStatusClass = computed(() => {
+  if (currentStatus.value === '已同步') return 'status-success'
+  if (currentStatus.value === '同步失败' || currentStatus.value === '连接异常') return 'status-error'
+  return ''
+})
+
 const getExpireLabel = (val) => expireOptions.find(o => o.val === val)?.label || ''
-const openHistory = () => { showHistory.value = true; showSettings.value = false; }
+
+const closeAll = () => { showSettings.value = false; showHistory.value = false; }
 const openSettings = () => { showSettings.value = true; showHistory.value = false; }
-const closeAllDrawers = () => { showSettings.value = false; showHistory.value = false; showQR.value = false; }
+const openHistory = () => { showHistory.value = true; showSettings.value = false; }
 
-// ESC 按键监听
-const handleEsc = (e) => { if (e.key === 'Escape') closeAllDrawers() }
-
-const init = async () => {
-  window.addEventListener('keydown', handleEsc)
-  
-  // 记录历史
-  if (!roomHistory.value.includes(roomId)) {
-    roomHistory.value.unshift(roomId)
-    localStorage.setItem('room_history', JSON.stringify(roomHistory.value.slice(0, 10)))
-  }
-
-  // 加载数据
+const fetchData = async () => {
   try {
-    statusText.value = '从云端同步中...'
     const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`)
-    if (res.ok) {
-      const data = await res.json()
-      textContent.value = data.content || ''
-      if (data.expireTime) expireTime.value = data.expireTime
-      // 延迟关闭锁，确保 Vue 的渲染周期完成
-      setTimeout(() => {
-        isInitialLoading.value = false
-        statusText.value = '已就绪'
-      }, 100)
-    } else {
-      throw new Error()
-    }
+    if (!res.ok) throw new Error()
+    const data = await res.json()
+    // 关键修复：确保数据加载到内容变量中
+    textContent.value = data.content || ''
+    if (data.expireTime) expireTime.value = data.expireTime
+    isReady.value = true
+    currentStatus.value = '已就绪'
   } catch (e) {
-    statusText.value = '连接异常'
-    isInitialLoading.value = false // 异常也要开锁，否则用户没法输入
+    currentStatus.value = '连接异常'
   }
 }
 
-onUnmounted(() => window.removeEventListener('keydown', handleEsc))
-
-let timer = null
+let saveTimer = null
 const handleInput = () => {
-  if (isInitialLoading.value) return // 锁定时不准同步
-
-  statusText.value = '同步中...'
-  clearTimeout(timer)
-  timer = setTimeout(async () => {
+  currentStatus.value = '同步中...'
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(async () => {
     try {
-      await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
+      const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: textContent.value, expireTime: expireTime.value })
+        body: JSON.stringify({ 
+          content: textContent.value, 
+          expireTime: expireTime.value 
+        })
       })
-      statusText.value = '已同步'
+      if (res.ok) currentStatus.value = '已同步'
+      else throw new Error()
     } catch (e) {
-      statusText.value = '同步失败'
+      currentStatus.value = '同步失败'
     }
   }, 800)
 }
 
-const saveFullSettings = async () => {
+const saveSettings = async () => {
   await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: textContent.value, password: roomPassword.value, expireTime: expireTime.value })
+    body: JSON.stringify({ 
+      content: textContent.value, 
+      password: roomPassword.value, 
+      expireTime: expireTime.value 
+    })
   })
   alert('设置已保存')
 }
 
-const jumpToRoom = (name) => { window.location.href = `?room=${encodeURIComponent(name)}` }
+const jumpRoom = (r) => { window.location.href = `?room=${encodeURIComponent(r)}` }
 const copyLink = () => {
   navigator.clipboard.writeText(currentUrl)
   alert('链接已复制')
 }
 
-onMounted(init)
+onMounted(() => {
+  fetchData()
+  if (!roomHistory.value.includes(roomId)) {
+    roomHistory.value.unshift(roomId)
+    localStorage.setItem('jjb_history', JSON.stringify(roomHistory.value.slice(0, 10)))
+  }
+})
 </script>
 
 <style>
-/* 核心布局修复：使用 flex-basis 分配空间 */
+:root { --bg: #f5f7f9; --card: #ffffff; --text: #333; --primary: #007bff; --border: #eee; }
+.dark-mode { --bg: #121212; --card: #1e1e1e; --text: #ddd; --border: #333; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { overflow-x: hidden; width: 100vw; font-family: -apple-system, sans-serif; background: #f8f9fa; }
-.container { display: flex; flex-direction: column; height: 100vh; }
-.dark-mode { background: #121212; color: #eee; }
+body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
 
-.top-nav-container { width: 100%; background: #fff; border-bottom: 1px solid #eee; z-index: 10; flex-shrink: 0; }
-.dark-mode .top-nav-container { background: #1e1e1e; border-bottom: 1px solid #333; }
-.top-nav { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; padding: 0 15px; height: 60px; position: relative; }
+/* 导航栏锁定 */
+.top-nav-wrapper { background: var(--card); border-bottom: 1px solid var(--border); height: 60px; width: 100%; position: relative; z-index: 100; }
+.top-nav { max-width: 1000px; margin: 0 auto; height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; position: relative; }
 
-/* 左、中、右布局，确保中间永远居中 */
-.nav-left { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.nav-center { position: absolute; left: 50%; transform: translateX(-50%); pointer-events: none; }
-.nav-right { flex: 1; display: flex; justify-content: flex-end; align-items: center; }
+.nav-section { display: flex; align-items: center; }
+.nav-section.left { gap: 10px; flex: 1; min-width: 0; }
+.nav-section.center { position: absolute; left: 50%; transform: translateX(-50%); pointer-events: none; }
+.nav-section.right { flex: 1; justify-content: flex-end; }
 
-.logo { font-size: 16px; color: #007bff; font-weight: bold; white-space: nowrap; }
-.room-tag { background: #f1f3f5; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.logo { font-weight: bold; color: var(--primary); white-space: nowrap; font-size: 16px; }
+.room-pill { background: var(--bg); padding: 4px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid var(--border); max-width: 120px; }
 .room-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dark-mode .room-tag { background: #333; }
-.status-dot { width: 8px; height: 8px; background: #ccc; border-radius: 50%; }
-.status-dot.online { background: #28a745; box-shadow: 0 0 5px rgba(40,167,69,0.3); }
+.dot { width: 7px; height: 7px; background: #ccc; border-radius: 50%; }
+.dot.online { background: #28a745; box-shadow: 0 0 5px rgba(40,167,69,0.5); }
 
-.expire-badge { background: #fff3e0; color: #e65100; padding: 4px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; border: 1px solid #ffe0b2; }
-.dark-mode .expire-badge { background: #332b1a; color: #ffb74d; border-color: #4d3d26; }
+.expire-tag { background: #fff3e0; color: #e65100; padding: 4px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; border: 1px solid #ffe0b2; }
+.dark-mode .expire-tag { background: #332b1a; color: #ffb74d; border-color: #4d3d26; }
 
-.icon-btn { background: none; border: none; font-size: 18px; cursor: pointer; margin-left: 12px; transition: transform 0.1s; }
-.icon-btn:active { transform: scale(0.9); }
+.btn-icon { background: none; border: none; font-size: 18px; cursor: pointer; padding: 8px; margin-left: 5px; border-radius: 8px; transition: background 0.2s; }
+.btn-icon:hover { background: var(--bg); }
 
-.main-content { flex: 1; width: 100%; max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; padding: 12px; min-height: 0; }
-.info-bar { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 6px; }
-.status-text.success { color: #28a745; }
-.room-tip { color: #bbb; margin-left: 6px; }
+/* 主体区域 */
+.content-area { max-width: 1000px; margin: 0 auto; height: calc(100vh - 60px); display: flex; flex-direction: column; padding: 15px; }
 
-.editor-wrapper { flex: 1; background: #fff; border-radius: 10px; border: 1px solid #e0e0e0; display: flex; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
-.dark-mode .editor-wrapper { background: #1e1e1e; border-color: #333; }
-.main-textarea { flex: 1; border: none; outline: none; padding: 15px; font-size: 16px; line-height: 1.6; resize: none; background: transparent; color: inherit; }
+.status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #999; margin-bottom: 8px; height: 20px; }
+.status-left { display: flex; align-items: center; gap: 10px; }
+.status-msg.status-success { color: #28a745; }
+.status-msg.status-error { color: #dc3545; }
+.hint { opacity: 0.5; }
 
-/* 侧边栏及弹窗样式保持原样 */
-.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 90; }
-.drawer { position: fixed; right: 0; top: 0; bottom: 0; width: 300px; background: #fff; z-index: 100; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 25px; box-shadow: -5px 0 20px rgba(0,0,0,0.1); will-change: transform; }
-.drawer.active { transform: translateX(0); }
-.dark-mode .drawer { background: #1e1e1e; }
-.drawer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-.drawer-close-btn { background: none; border: none; font-size: 24px; color: #aaa; cursor: pointer; }
+.editor-box { flex: 1; background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+textarea { width: 100%; height: 100%; border: none; outline: none; padding: 20px; font-size: 16px; line-height: 1.6; resize: none; background: transparent; color: inherit; font-family: inherit; }
 
-.opt-group { margin-bottom: 25px; }
-.opt-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 10px; color: #666; }
-.grid-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.grid-options button { padding: 8px; border: 1px solid #eee; background: #fdfdfd; border-radius: 6px; cursor: pointer; color: inherit; font-size: 12px; }
-.grid-options button.active { background: #007bff; color: #fff; border-color: #007bff; }
-.btn-full-primary { width: 100%; background: #f0f7ff; color: #007bff; border: 1px solid #007bff; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+/* 侧边栏 */
+.mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; backdrop-filter: blur(2px); }
+.side-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 300px; background: var(--card); z-index: 300; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; }
+.side-drawer.show { transform: translateX(0); }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-.modal-card { background: #fff; padding: 25px; border-radius: 15px; text-align: center; max-width: 300px; width: 90%; }
-.dark-mode .modal-card { background: #1e1e1e; }
-.qr-container { background: #fff; padding: 10px; border-radius: 10px; display: inline-block; }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.drawer-head button { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; }
 
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.field { margin-bottom: 25px; }
+.field label { display: block; font-size: 13px; margin-bottom: 8px; font-weight: bold; opacity: 0.8; }
+.input-btn-group { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.input-btn-group input { flex: 1; padding: 10px; border: none; outline: none; background: transparent; color: inherit; }
+.input-btn-group button { background: var(--primary); color: #fff; border: none; padding: 0 15px; cursor: pointer; }
 
-.history-card { padding: 12px; background: #fafafa; border-radius: 8px; margin-bottom: 10px; cursor: pointer; border: 1px solid #eee; }
-.dark-mode .history-card { background: #2d2d2d; border-color: #333; }
+.opt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.opt-grid button { padding: 8px; border: 1px solid var(--border); background: var(--bg); border-radius: 6px; cursor: pointer; font-size: 12px; color: inherit; }
+.opt-grid button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
+.primary-btn { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
+/* 弹窗 */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-body { background: var(--card); padding: 25px; border-radius: 20px; text-align: center; }
+.qr-wrap { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 15px; display: inline-block; }
+.modal-body button { margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: var(--bg); color: inherit; }
+
+.history-item { padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; font-size: 14px; }
+.history-item:hover { background: var(--bg); }
+
+/* 移动端适配：隐藏部分文字 */
 @media (max-width: 600px) {
-  .logo, .room-tip { display: none; }
-  .drawer { width: 85%; }
+  .logo { display: none; }
+  .hint { display: none; }
+  .nav-section.center { position: static; transform: none; left: auto; flex: 1; justify-content: center; }
+  .side-drawer { width: 85%; }
+  .status-right { font-size: 10px; }
 }
 </style>
