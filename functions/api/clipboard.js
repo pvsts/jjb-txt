@@ -54,8 +54,8 @@ export async function onRequest(context) {
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(room_id) DO UPDATE SET
         content = excluded.content,
-        password = CASE WHEN excluded.password IS NOT NULL THEN excluded.password ELSE password END,
-        expires_at = CASE WHEN excluded.expires_at IS NOT NULL THEN excluded.expires_at ELSE expires_at END,
+        password = CASE WHEN excluded.password != '' THEN excluded.password ELSE NULL END,
+        expires_at = CASE WHEN excluded.expires_at IS NOT NULL AND excluded.expires_at != '' THEN excluded.expires_at ELSE expires_at END,
         updated_at = CURRENT_TIMESTAMP
       `).bind(roomId, content, password || null, expiresAt).run();
 
