@@ -4,4 +4,4 @@ pages_build_output_dir = "./dist"
 [[d1_databases]]
 binding = "DB" # 必须是 DB，和后端代码一致
 database_name = "jjb-db"
-database_id = "375a3b9e-ef71-44ff-8a6a-aeb95e90172f" # 在 CF 后台 D1 页面可以看到
+database_id = "43154b80-8636-427c-be5b-61e6fd12f069" # 在 CF 后台 D1 页面可以看到
