@@ -99,24 +99,34 @@
       </div>
     </teleport>
 
-    <teleport to="body">
-      <div v-if="needPasswordAuth" class="modal auth-modal">
-        <div class="modal-body auth-card" @click.stop>
-          <div class="auth-icon">🔒</div>
-          <h3>此房间已加密</h3>
-          <p>请输入访问密码以查看内容</p>
-          <input 
-            v-model="roomPassword" 
-            type="password" 
-            placeholder="访问密码" 
-            class="auth-input"
-            @keyup.enter="fetchData" 
-          />
-          <button @click="fetchData" class="primary-btn">验证并进入</button>
-          <p class="auth-footer" @click="jumpRoom('公共频道')">返回公共频道</p>
-        </div>
-      </div>
-    </teleport>
+<teleport to="body">
+  <div v-if="needPasswordAuth" class="modal auth-modal">
+    <div class="modal-body auth-card" @click.stop>
+      <div class="auth-icon">🔒</div>
+      <h3>此房间已加密</h3>
+      <p>请输入访问密码以查看内容</p>
+      
+      <input 
+        v-model="roomPassword" 
+        type="password" 
+        placeholder="访问密码" 
+        class="auth-input"
+        :disabled="currentStatus === '正在加载...'"
+        @keyup.enter="fetchData" 
+      />
+
+      <button 
+        @click="fetchData" 
+        class="primary-btn" 
+        :disabled="currentStatus === '正在加载...'"
+      >
+        {{ currentStatus === '正在加载...' ? '验证中...' : '验证并进入' }}
+      </button>
+
+      <p class="auth-footer" @click="jumpRoom('公共频道')">返回公共频道</p>
+    </div>
+  </div>
+</teleport>
   </div>
 </template>
 
@@ -165,39 +175,58 @@ const openHistory = () => { showHistory.value = true; showSettings.value = false
 
 // 获取数据逻辑
 const fetchData = async () => {
+  if (!roomId) return;
+  
   try {
-    currentStatus.value = '正在加载...'
+    currentStatus.value = '正在加载...';
     // 请求时带上密码 Header
     const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
       headers: { 'x-password': roomPassword.value }
-    })
+    });
     
-    if (!res.ok) throw new Error()
-    const data = await res.json()
-
-    // 处理加密逻辑
-    if (data.needPassword) {
-      needPasswordAuth.value = true
-      isReady.value = false
-      currentStatus.value = '房间已加密'
-      return
+    // 情况 A：后端返回 401，代表明确的密码错误
+    if (res.status === 401) {
+      alert('❌ 密码错误，请重新输入');
+      roomPassword.value = ''; // 清空错误密码
+      needPasswordAuth.value = true;
+      isReady.value = false;
+      currentStatus.value = '密码错误';
+      return;
     }
 
-    // 验证成功或无密码
-    textContent.value = data.content || ''
-    if (data.expireTime) expireTime.value = data.expireTime
-    needPasswordAuth.value = false
-    isReady.value = true
-    currentStatus.value = '已就绪'
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    // 情况 B：后端逻辑返回 needPassword 标志（第一次进入房间）
+    if (data.needPassword) {
+      // 如果此时用户已经输入了密码却还返回 needPassword，说明密码不对
+      if (roomPassword.value) {
+        alert('❌ 密码错误，请重新输入');
+        roomPassword.value = '';
+      }
+      needPasswordAuth.value = true;
+      isReady.value = false;
+      currentStatus.value = '房间已加密';
+      return;
+    }
+
+    // 情况 C：验证成功或无密码
+    textContent.value = data.content || '';
+    if (data.expireTime) expireTime.value = data.expireTime;
     
-    // 如果验证成功且有密码，存入本地以便下次自动进入
+    needPasswordAuth.value = false; // 关闭弹窗
+    isReady.value = true;
+    currentStatus.value = '已就绪';
+    
+    // 验证成功后，持久化存储该房间的密码
     if (roomPassword.value) {
-      localStorage.setItem(`pw_${roomId}`, roomPassword.value)
+      localStorage.setItem(`pw_${roomId}`, roomPassword.value);
     }
   } catch (e) {
-    currentStatus.value = '连接异常'
+    currentStatus.value = '连接异常';
+    console.error(e);
   }
-}
+};
 
 // 保存逻辑
 let saveTimer = null
@@ -325,8 +354,6 @@ textarea { width: 100%; height: 100%; border: none; outline: none; padding: 20px
 .qr-wrap { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 15px; display: inline-block; }
 .modal-body button { margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: var(--bg); color: inherit; }
 
-
-  
 .history-item { padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; font-size: 14px; }
 .history-item:hover { background: var(--bg); }
 
@@ -338,10 +365,4 @@ textarea { width: 100%; height: 100%; border: none; outline: none; padding: 20px
   .side-drawer { width: 85%; }
   .status-right { font-size: 10px; }
 }
-/* 补充验证弹窗专用样式 */
-.auth-modal { backdrop-filter: blur(10px); background: rgba(0,0,0,0.7) !important; }
-.auth-card { width: 320px; padding: 40px 30px !important; }
-.auth-icon { font-size: 40px; margin-bottom: 15px; }
-.auth-input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin: 20px 0; text-align: center; font-size: 18px; outline: none; }
-.auth-footer { margin-top: 20px; font-size: 12px; color: var(--primary); cursor: pointer; text-decoration: underline; }
 </style>
