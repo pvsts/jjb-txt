@@ -141,10 +141,23 @@ const openHistory = () => { showHistory.value = true; showSettings.value = false
 
 const fetchData = async () => {
   try {
-    const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`)
+    // 请求时把本地的 roomPassword 放在 Header 里传给后端
+    const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
+      headers: { 'x-password': roomPassword.value }
+    })
+    
     if (!res.ok) throw new Error()
     const data = await res.json()
-    // 关键修复：确保数据加载到内容变量中
+
+    // 如果后端说需要密码
+    if (data.needPassword) {
+      currentStatus.value = '房间已加密，请输入密码'
+      textContent.value = '' 
+      isReady.value = false
+      // 这里可以弹窗提示用户输入，或者让用户去设置栏输入
+      return
+    }
+
     textContent.value = data.content || ''
     if (data.expireTime) expireTime.value = data.expireTime
     isReady.value = true
@@ -153,7 +166,6 @@ const fetchData = async () => {
     currentStatus.value = '连接异常'
   }
 }
-
 let saveTimer = null
 const handleInput = () => {
   currentStatus.value = '同步中...'
