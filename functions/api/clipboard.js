@@ -1,32 +1,23 @@
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-  const roomId = url.searchParams.get('room') || '公共频道';
-  const db = env.DB;
+  const roomId = url.searchParams.get("room") || "公共频道";
+  const DB = env.DB; // 直接从环境变量获取数据库对象
 
   // 1. 获取内容 (GET)
-  if (request.method === 'GET') {
-    const data = await db.prepare('SELECT * FROM clipboards WHERE id = ?').bind(roomId).first();
-    return new Response(JSON.stringify({ data: data || null }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+  if (request.method === "GET") {
+    const result = await DB.prepare("SELECT content FROM clipboard WHERE room_id = ?")
+      .bind(roomId).first();
+    return Response.json({ data: result || { content: "" } });
   }
 
-  // 2. 保存内容 (POST)
-  if (request.method === 'POST') {
+  // 2. 自动保存内容 (POST)
+  if (request.method === "POST") {
     const { content } = await request.json();
-    await db.prepare(`
-      INSERT INTO clipboards (id, content, updated_at)
-      VALUES (?1, ?2, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET
-        content = excluded.content,
-        updated_at = CURRENT_TIMESTAMP
+    await DB.prepare(`
+      INSERT INTO clipboard (room_id, content) VALUES (?, ?)
+      ON CONFLICT(room_id) DO UPDATE SET content = excluded.content
     `).bind(roomId, content).run();
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return Response.json({ success: true });
   }
-
-  return new Response('Method Not Allowed', { status: 405 });
 }
