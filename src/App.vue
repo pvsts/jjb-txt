@@ -39,6 +39,7 @@
         <textarea 
           v-model="textContent" 
           @input="handleInput" 
+          :disabled="!isReady"
           placeholder="在此输入内容，停顿后自动同步到云端..." 
           spellcheck="false"
         ></textarea>
@@ -46,6 +47,7 @@
     </main>
 
     <div v-if="showSettings || showHistory" class="mask" @click="closeAll"></div>
+    
     <aside :class="['side-drawer', { 'show': showSettings }]">
       <div class="drawer-head">
         <h3>房间设置</h3>
@@ -53,14 +55,14 @@
       </div>
       <div class="drawer-content">
         <div class="field">
-          <label>🔒 访问密码</label>
+          <label>🔒 房间管理密码 (设置后他人需密码访问)</label>
           <div class="input-btn-group">
-            <input v-model="roomPassword" type="password" placeholder="留空不设密码" />
+            <input v-model="roomPassword" type="password" placeholder="留空则取消密码" />
             <button @click="saveSettings">保存</button>
           </div>
         </div>
         <div class="field">
-          <label>⏰ 自动销毁</label>
+          <label>⏰ 自动销毁 (有效期)</label>
           <div class="opt-grid">
             <button v-for="opt in expireOptions" :key="opt.val" 
               :class="{ active: expireTime === opt.val }"
@@ -96,13 +98,33 @@
         </div>
       </div>
     </teleport>
+
+    <teleport to="body">
+      <div v-if="needPasswordAuth" class="modal auth-modal">
+        <div class="modal-body auth-card" @click.stop>
+          <div class="auth-icon">🔒</div>
+          <h3>此房间已加密</h3>
+          <p>请输入访问密码以查看内容</p>
+          <input 
+            v-model="roomPassword" 
+            type="password" 
+            placeholder="访问密码" 
+            class="auth-input"
+            @keyup.enter="fetchData" 
+          />
+          <button @click="fetchData" class="primary-btn">验证并进入</button>
+          <p class="auth-footer" @click="jumpRoom('公共频道')">返回公共频道</p>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import QrcodeVue from 'qrcode.vue'
 
+// 状态变量
 const roomId = new URLSearchParams(window.location.search).get('room') || '公共频道'
 const textContent = ref('')
 const isReady = ref(false)
@@ -111,7 +133,9 @@ const isDarkMode = ref(false)
 const showSettings = ref(false)
 const showHistory = ref(false)
 const showQR = ref(false)
-const roomPassword = ref('')
+const needPasswordAuth = ref(false) // 是否需要输入密码
+
+const roomPassword = ref(localStorage.getItem(`pw_${roomId}`) || '')
 const expireTime = ref('never')
 const roomHistory = ref(JSON.parse(localStorage.getItem('jjb_history') || '[]'))
 
@@ -128,8 +152,8 @@ const textStats = computed(() => ({
 }))
 
 const syncStatusClass = computed(() => {
-  if (currentStatus.value === '已同步') return 'status-success'
-  if (currentStatus.value === '同步失败' || currentStatus.value === '连接异常') return 'status-error'
+  if (currentStatus.value === '已同步' || currentStatus.value === '已就绪') return 'status-success'
+  if (currentStatus.value === '同步失败' || currentStatus.value === '连接异常' || currentStatus.value.includes('加密')) return 'status-error'
   return ''
 })
 
@@ -139,9 +163,11 @@ const closeAll = () => { showSettings.value = false; showHistory.value = false; 
 const openSettings = () => { showSettings.value = true; showHistory.value = false; }
 const openHistory = () => { showHistory.value = true; showSettings.value = false; }
 
+// 获取数据逻辑
 const fetchData = async () => {
   try {
-    // 请求时把本地的 roomPassword 放在 Header 里传给后端
+    currentStatus.value = '正在加载...'
+    // 请求时带上密码 Header
     const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
       headers: { 'x-password': roomPassword.value }
     })
@@ -149,25 +175,34 @@ const fetchData = async () => {
     if (!res.ok) throw new Error()
     const data = await res.json()
 
-    // 如果后端说需要密码
+    // 处理加密逻辑
     if (data.needPassword) {
-      currentStatus.value = '房间已加密，请输入密码'
-      textContent.value = '' 
+      needPasswordAuth.value = true
       isReady.value = false
-      // 这里可以弹窗提示用户输入，或者让用户去设置栏输入
+      currentStatus.value = '房间已加密'
       return
     }
 
+    // 验证成功或无密码
     textContent.value = data.content || ''
     if (data.expireTime) expireTime.value = data.expireTime
+    needPasswordAuth.value = false
     isReady.value = true
     currentStatus.value = '已就绪'
+    
+    // 如果验证成功且有密码，存入本地以便下次自动进入
+    if (roomPassword.value) {
+      localStorage.setItem(`pw_${roomId}`, roomPassword.value)
+    }
   } catch (e) {
     currentStatus.value = '连接异常'
   }
 }
+
+// 保存逻辑
 let saveTimer = null
 const handleInput = () => {
+  if (!isReady.value) return
   currentStatus.value = '同步中...'
   clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
@@ -189,22 +224,30 @@ const handleInput = () => {
 }
 
 const saveSettings = async () => {
-  await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      content: textContent.value, 
-      password: roomPassword.value, 
-      expireTime: expireTime.value 
+  try {
+    const res = await fetch(`/api/clipboard?room=${encodeURIComponent(roomId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        content: textContent.value, 
+        password: roomPassword.value, 
+        expireTime: expireTime.value 
+      })
     })
-  })
-  alert('设置已保存')
+    if (res.ok) {
+      localStorage.setItem(`pw_${roomId}`, roomPassword.value)
+      alert('房间设置已更新')
+      fetchData() // 刷新状态
+    }
+  } catch (e) {
+    alert('保存失败')
+  }
 }
 
 const jumpRoom = (r) => { window.location.href = `?room=${encodeURIComponent(r)}` }
 const copyLink = () => {
   navigator.clipboard.writeText(currentUrl)
-  alert('链接已复制')
+  alert('房间链接已复制')
 }
 
 onMounted(() => {
