@@ -354,6 +354,54 @@ textarea { width: 100%; height: 100%; border: none; outline: none; padding: 20px
 .qr-wrap { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 15px; display: inline-block; }
 .modal-body button { margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: var(--bg); color: inherit; }
 
+/* 认证卡片 */
+.auth-card { padding: 35px 30px; width: 90%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+.auth-icon { font-size: 48px; margin-bottom: 15px; }
+.auth-card h3 { font-size: 20px; margin-bottom: 8px; }
+.auth-card > p { font-size: 14px; color: #999; margin-bottom: 25px; }
+
+.auth-input { 
+  width: 100%; 
+  padding: 14px 16px; 
+  border: 2px solid var(--border); 
+  border-radius: 12px; 
+  font-size: 16px; 
+  outline: none; 
+  background: var(--bg); 
+  color: var(--text); 
+  margin-bottom: 20px; 
+  text-align: center;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.auth-input:focus { 
+  border-color: var(--primary); 
+  box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+.auth-input:disabled { 
+  opacity: 0.5; 
+  cursor: not-allowed;
+}
+.auth-input::placeholder {
+  letter-spacing: normal;
+  color: #999;
+}
+
+.auth-footer { 
+  margin-top: 15px; 
+  font-size: 13px; 
+  color: #999; 
+  cursor: pointer; 
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.auth-footer:hover { 
+  color: var(--primary); 
+  background: var(--bg);
+}
+
 .history-item { padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; font-size: 14px; }
 .history-item:hover { background: var(--bg); }
 
