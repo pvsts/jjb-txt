@@ -21,25 +21,22 @@ export async function onRequest(context) {
       }
 
       // --- 关键安全逻辑开始 ---
-      if (data.password) {
-        // 如果有密码，校验前端传来的密码是否匹配
-        if (data.password !== clientPassword) {
-          // 密码不匹配：只告诉前端“需要密码”，内容给空的
-          return new Response(JSON.stringify({ 
-            content: '', 
-            needPassword: true, 
-            msg: '此房间已加密，请在设置中输入密码后刷新' 
-          }), { headers: { 'Content-Type': 'application/json' } });
+    // Worker 内部 GET 逻辑参考
+    if (data.password) {
+      if (data.password !== clientPassword) {
+        // 如果用户传了密码但不匹配，返回 401 状态码
+        if (clientPassword) {
+          return new Response(JSON.stringify({ wrongPassword: true }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json' } 
+          });
         }
+        // 如果用户根本没传密码，返回普通加密提示
+        return new Response(JSON.stringify({ needPassword: true }), { 
+          headers: { 'Content-Type': 'application/json' } 
+        });
       }
-      // --- 关键安全逻辑结束 ---
-
-      return new Response(JSON.stringify({ content: data.content, hasPassword: !!data.password }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
     }
-    return new Response(JSON.stringify({ content: '' }), { headers: { 'Content-Type': 'application/json' } });
-  }
 
   // 2. 处理 POST 请求（保持你的逻辑，增加错误处理）
   if (request.method === 'POST') {
