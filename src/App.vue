@@ -325,6 +325,8 @@ textarea { width: 100%; height: 100%; border: none; outline: none; padding: 20px
 .qr-wrap { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 15px; display: inline-block; }
 .modal-body button { margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: var(--bg); color: inherit; }
 
+
+  
 .history-item { padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; font-size: 14px; }
 .history-item:hover { background: var(--bg); }
 
@@ -336,4 +338,10 @@ textarea { width: 100%; height: 100%; border: none; outline: none; padding: 20px
   .side-drawer { width: 85%; }
   .status-right { font-size: 10px; }
 }
+/* 补充验证弹窗专用样式 */
+.auth-modal { backdrop-filter: blur(10px); background: rgba(0,0,0,0.7) !important; }
+.auth-card { width: 320px; padding: 40px 30px !important; }
+.auth-icon { font-size: 40px; margin-bottom: 15px; }
+.auth-input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin: 20px 0; text-align: center; font-size: 18px; outline: none; }
+.auth-footer { margin-top: 20px; font-size: 12px; color: var(--primary); cursor: pointer; text-decoration: underline; }
 </style>
